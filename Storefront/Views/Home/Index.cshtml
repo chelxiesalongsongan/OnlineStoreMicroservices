@@ -1,8 +1,31 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
-}
+﻿@model List<Storefront.Clients.ProductView>
+@{ ViewData["Title"] = "Store"; }
+<h1>Products</h1>
+@if (ViewBag.Error != null) { <div class="alert alert-warning">@ViewBag.Error</div> }
+@if (TempData["Error"] != null) { <div class="alert alert-danger">@TempData["Error"]</div> }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-</div>
+<form asp-controller="Orders" asp-action="Create" method="post">
+    <div class="mb-3"><input class="form-control" name="CustomerName" placeholder="Your name" required /></div>
+    <table class="table">
+        <thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Qty</th></tr></thead>
+        <tbody>
+        @for (var i = 0; i < Model.Count; i++)
+        {
+            <tr>
+                <td>@Model[i].Name</td>
+                <td>@Model[i].Price.ToString("C")</td>
+                <td>@Model[i].Stock</td>
+                <td>
+                    <input type="hidden" name="Lines[@i].ProductId" value="@Model[i].Id" />
+                    <input type="number" min="0" value="0" name="Lines[@i].Quantity" class="form-control" style="width:90px" />
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" name="ForcePaymentFailure" value="true" id="ff" />
+        <label class="form-check-label" for="ff">Simulate payment failure (demo compensation)</label>
+    </div>
+    <button class="btn btn-primary">Place order</button>
+</form>

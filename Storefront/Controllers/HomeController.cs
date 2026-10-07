@@ -1,31 +1,19 @@
-using System.Diagnostics;
-using Microsoft.AspNetCore.Mvc;
-using Storefront.Models;
+﻿using Microsoft.AspNetCore.Mvc;
+using Storefront.Clients;
 
 namespace Storefront.Controllers;
 
-public class HomeController : Controller
+public class HomeController(CatalogApi catalog) : Controller
 {
-    private readonly ILogger<HomeController> _logger;
-
-    public HomeController(ILogger<HomeController> logger)
+    public async Task<IActionResult> Index(CancellationToken ct)
     {
-        _logger = logger;
+        try { return View(await catalog.GetProductsAsync(ct)); }
+        catch (HttpRequestException)
+        {
+            ViewBag.Error = "Catalog is currently unavailable.";
+            return View(new List<ProductView>());
+        }
     }
 
-    public IActionResult Index()
-    {
-        return View();
-    }
-
-    public IActionResult Privacy()
-    {
-        return View();
-    }
-
-    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-    public IActionResult Error()
-    {
-        return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
-    }
+    public IActionResult Error() => Content("Something went wrong.");
 }
