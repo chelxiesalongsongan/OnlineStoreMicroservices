@@ -1,0 +1,86 @@
+﻿openapi: 3.0.3
+info: { title: Payment API, version: v1 }
+servers: [ { url: http://localhost:5101 } ]
+paths:
+  /payments/v1/payments:
+    get:
+      operationId: ListPayments
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Payment' } } } } }
+    post:
+      operationId: CreatePayment
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ChargeRequest' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Payment' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /payments/v1/payments/{id}:
+    parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+    get:
+      operationId: GetPayment
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Payment' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: UpdatePayment
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdatePaymentRequest' } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Payment' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: DeletePayment
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /payments/v1/payments/charge:
+    post:
+      operationId: ChargePayment
+      description: Saga step. Idempotent per orderId.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ChargeRequest' } } } }
+      responses:
+        '200': { description: Charged, content: { application/json: { schema: { $ref: '#/components/schemas/Payment' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '402': { description: Declined, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } } }
+  /payments/v1/payments/{id}/refund:
+    parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+    post:
+      operationId: RefundPayment
+      description: Saga compensation.
+      responses:
+        '200': { description: Refunded, content: { application/json: { schema: { $ref: '#/components/schemas/Payment' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  responses:
+    BadRequest: { description: Validation error, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } } }
+    NotFound: { description: Not found, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } } }
+  schemas:
+    PaymentStatus: { type: string, enum: [Pending, Charged, Failed, Refunded] }
+    Payment:
+      type: object
+      properties:
+        id: { type: integer }
+        orderId: { type: integer }
+        amount: { type: number, format: double }
+        status: { $ref: '#/components/schemas/PaymentStatus' }
+        createdAt: { type: string, format: date-time }
+        correlationId: { type: string, nullable: true }
+    ChargeRequest:
+      type: object
+      required: [orderId, amount]
+      properties:
+        orderId: { type: integer, minimum: 1 }
+        amount: { type: number, format: double, minimum: 0.01 }
+        forceFailure: { type: boolean, default: false }
+    UpdatePaymentRequest:
+      type: object
+      required: [status]
+      properties: { status: { $ref: '#/components/schemas/PaymentStatus' } }
+    ProblemDetails:
+      type: object
+      additionalProperties: true
+      properties:
+        type: { type: string, nullable: true }
+        title: { type: string, nullable: true }
+        status: { type: integer, nullable: true }
+        detail: { type: string, nullable: true }
+        instance: { type: string, nullable: true }
