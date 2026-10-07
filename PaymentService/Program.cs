@@ -1,25 +1,27 @@
+﻿using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
+using OnlineStore.Shared;
+using PaymentService.Data;
+
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddSimpleConsole(o => { o.IncludeScopes = true; o.SingleLine = true; });
 
-// Add services to the container.
-
-builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddControllers()
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddDbContext<PaymentDbContext>(o => o.UseSqlite(builder.Configuration.GetConnectionString("PaymentDb")));
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+using (var scope = app.Services.CreateScope())
+    scope.ServiceProvider.GetRequiredService<PaymentDbContext>().Database.Migrate();   // creates DB on a clean checkout
 
-app.UseHttpsRedirection();
-
-app.UseAuthorization();
-
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+app.UseSwagger();
+app.UseSwaggerUI();
 app.MapControllers();
-
 app.Run();
