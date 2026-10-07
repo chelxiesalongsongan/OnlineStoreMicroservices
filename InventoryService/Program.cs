@@ -1,6 +1,7 @@
 ﻿using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using InventoryService.Data;
+using InventoryService.Messaging;
 using OnlineStore.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,9 +15,13 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<InventoryDbContext>(o => o.UseSqlite(builder.Configuration.GetConnectionString("InventoryDb")));
 
+builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection("RabbitMq"));
+builder.Services.AddSingleton<RabbitMqPublisher>();
+builder.Services.AddScoped<InventoryHandler>();
+builder.Services.AddHostedService<InventoryConsumer>();
+
 var app = builder.Build();
 
-// create + seed the database on a clean checkout
 using (var scope = app.Services.CreateScope())
     scope.ServiceProvider.GetRequiredService<InventoryDbContext>().Database.Migrate();
 
