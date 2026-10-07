@@ -1,0 +1,25 @@
+﻿@model Storefront.Clients.OrderView
+@{ ViewData["Title"] = $"Order {Model.Id}"; var inFlight = Model.Status is "Pending" or "StockReserved"; }
+<h1>Order #@Model.Id</h1>
+@if (TempData["Error"] != null) { <div class="alert alert-danger">@TempData["Error"]</div> }
+
+<p>
+    Status:
+    <span class="badge @(Model.Status == "Confirmed" ? "bg-success" : Model.Status == "Cancelled" ? "bg-danger" : "bg-secondary")">@Model.Status</span>
+    @if (inFlight) { <small class="text-muted">processing… refreshing</small> }
+</p>
+@if (Model.CancelReason != null) { <p class="text-danger">Reason: @Model.CancelReason</p> }
+<p>Customer: @Model.CustomerName &middot; Total: @Model.Total.ToString("C")</p>
+<p><small class="text-muted">Correlation ID: @Model.CorrelationId</small></p>
+
+<ul>@foreach (var i in Model.Items) { <li>Product @i.ProductId × @i.Quantity @@ @i.UnitPrice.ToString("C")</li> }</ul>
+
+@if (Model.Status == "Confirmed")
+{
+    <form asp-action="Cancel" asp-route-id="@Model.Id" method="post">
+        <button class="btn btn-outline-danger">Cancel &amp; refund</button>
+    </form>
+}
+<a asp-controller="Home" asp-action="Index">Back to store</a>
+
+@section Scripts { @if (inFlight) { <script>setTimeout(() => location.reload(), 2000);</script> } }
