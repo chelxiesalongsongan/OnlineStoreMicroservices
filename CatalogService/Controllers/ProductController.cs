@@ -55,5 +55,22 @@ namespace CatalogService.Controllers
                 new { id = product.Id },
                 product);
         }
+
+        [HttpPut("{id}")]
+        public IActionResult UpdateProduct(int id, Product updatedProduct)
+        {
+            var product = products.FirstOrDefault(p => p.Id == id);
+
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            product.Name = updatedProduct.Name;
+            product.Price = updatedProduct.Price;
+            product.Stock = updatedProduct.Stock;
+
+            return Ok(product);
+        }
     }
 }
