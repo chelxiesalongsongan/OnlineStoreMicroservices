@@ -1,36 +1,31 @@
-using CatalogService.Data;
+﻿using CatalogService.Data;
 using Microsoft.EntityFrameworkCore;
+using OnlineStore.Shared;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddSimpleConsole(o => { o.IncludeScopes = true; o.SingleLine = true; });
 
-// Add services to the container.
 builder.Services.AddControllers();
-
 builder.Services.AddProblemDetails();
 
-// Register Catalog Database
 builder.Services.AddDbContext<CatalogDbContext>(options =>
-    options.UseSqlite(
-        builder.Configuration.GetConnectionString("CatalogDb")));
+    options.UseSqlite(builder.Configuration.GetConnectionString("CatalogDb")));
 
-// Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Enable Problem Details for errors
-app.UseExceptionHandler();
+// create/seed the database on a clean checkout
+using (var scope = app.Services.CreateScope())
+    scope.ServiceProvider.GetRequiredService<CatalogDbContext>().Database.Migrate();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseMiddleware<CorrelationIdMiddleware>();   // logs and propagates X-Correlation-ID
+app.UseExceptionHandler();                      // Problem Details for unhandled errors
+app.UseStatusCodePages();                       // Problem Details for plain 404s etc.
 
-app.UseHttpsRedirection();
-
-app.UseAuthorization();
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.MapControllers();
 
