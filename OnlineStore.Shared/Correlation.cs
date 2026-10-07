@@ -1,4 +1,7 @@
-﻿namespace OnlineStore.Shared;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+
+namespace OnlineStore.Shared;
 
 public static class Correlation
 {
@@ -33,3 +36,4 @@ public class CorrelationIdHandler : DelegatingHandler
         return base.SendAsync(request, ct);
     }
 }
+
