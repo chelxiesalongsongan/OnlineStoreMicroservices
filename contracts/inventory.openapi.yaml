@@ -1,0 +1,81 @@
+﻿openapi: 3.0.3
+info: { title: Inventory API, version: v1 }
+servers: [ { url: http://localhost:5104 } ]
+paths:
+  /inventory/v1/stock:
+    get:
+      operationId: ListStock
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/StockItem' } } } } }
+    post:
+      operationId: CreateStockItem
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/StockItemRequest' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/StockItem' } } } }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
+  /inventory/v1/stock/{id}:
+    parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+    get:
+      operationId: GetStockItem
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/StockItem' } } } }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+    put:
+      operationId: UpdateStockItem
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/StockItemRequest' } } } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/StockItem' } } } }
+        '400': { $ref: '#/components/responses/ProblemResponse' }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+        '409': { $ref: '#/components/responses/ProblemResponse' }
+    delete:
+      operationId: DeleteStockItem
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/ProblemResponse' }
+  /inventory/v1/reservations:
+    get:
+      operationId: ListReservations
+      description: Read-only view of stock reservations made by the order saga.
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Reservation' } } } } }
+components:
+  responses:
+    ProblemResponse: { description: Problem Details, content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } } }
+  schemas:
+    StockItem:
+      type: object
+      properties:
+        id: { type: integer }
+        productId: { type: integer, description: Id of the product in the Catalog service (no cross-database link) }
+        quantityOnHand: { type: integer }
+        reserved: { type: integer }
+        available: { type: integer, readOnly: true, description: quantityOnHand minus reserved }
+    StockItemRequest:
+      type: object
+      required: [productId, quantityOnHand]
+      properties:
+        productId: { type: integer, minimum: 1 }
+        quantityOnHand: { type: integer, minimum: 0 }
+    ReservationStatus: { type: string, enum: [Reserved, Released] }
+    ReservationLine:
+      type: object
+      properties: { productId: { type: integer }, quantity: { type: integer } }
+    Reservation:
+      type: object
+      properties:
+        id: { type: integer }
+        orderId: { type: integer }
+        status: { $ref: '#/components/schemas/ReservationStatus' }
+        createdAt: { type: string, format: date-time }
+        lines: { type: array, items: { $ref: '#/components/schemas/ReservationLine' } }
+    ProblemDetails:
+      type: object
+      additionalProperties: true
+      properties:
+        type: { type: string, nullable: true }
+        title: { type: string, nullable: true }
+        status: { type: integer, nullable: true }
+        detail: { type: string, nullable: true }
+        instance: { type: string, nullable: true }
