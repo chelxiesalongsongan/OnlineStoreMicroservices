@@ -43,5 +43,17 @@ namespace CatalogService.Controllers
 
             return Ok(product);
         }
+
+        [HttpPost]
+        public IActionResult CreateProduct(Product product)
+        {
+            product.Id = products.Count + 1;
+            products.Add(product);
+
+            return CreatedAtAction(
+                nameof(GetProduct),
+                new { id = product.Id },
+                product);
+        }
     }
 }
