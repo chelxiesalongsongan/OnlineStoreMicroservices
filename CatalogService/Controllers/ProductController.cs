@@ -1,40 +1,35 @@
-﻿using CatalogService.Models;
+﻿using CatalogService.Data;
+using CatalogService.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace CatalogService.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("catalog/v1/products")]
     public class ProductController : ControllerBase
     {
-        private static readonly List<Product> products = new()
-        {
-            new Product
-            {
-                Id = 1,
-                Name = "Car Window Tint",
-                Price = 5000,
-                Stock = 10
-            },
-            new Product
-            {
-                Id = 2,
-                Name = "Leather Seat Cover",
-                Price = 8000,
-                Stock = 5
-            }
-        };
+        private readonly CatalogDbContext _context;
 
-        [HttpGet]
-        public IActionResult GetProducts()
+        public ProductController(CatalogDbContext context)
         {
+            _context = context;
+        }
+
+        // GET: api/Product
+        [HttpGet]
+        public async Task<IActionResult> GetProducts()
+        {
+            var products = await _context.Products.ToListAsync();
+
             return Ok(products);
         }
 
+        // GET: api/Product/1
         [HttpGet("{id}")]
-        public IActionResult GetProduct(int id)
+        public async Task<IActionResult> GetProduct(int id)
         {
-            var product = products.FirstOrDefault(p => p.Id == id);
+            var product = await _context.Products.FindAsync(id);
 
             if (product == null)
             {
@@ -44,11 +39,12 @@ namespace CatalogService.Controllers
             return Ok(product);
         }
 
+        // POST: api/Product
         [HttpPost]
-        public IActionResult CreateProduct(Product product)
+        public async Task<IActionResult> CreateProduct(Product product)
         {
-            product.Id = products.Count + 1;
-            products.Add(product);
+            _context.Products.Add(product);
+            await _context.SaveChangesAsync();
 
             return CreatedAtAction(
                 nameof(GetProduct),
@@ -56,10 +52,13 @@ namespace CatalogService.Controllers
                 product);
         }
 
+        // PUT: api/Product/1
         [HttpPut("{id}")]
-        public IActionResult UpdateProduct(int id, Product updatedProduct)
+        public async Task<IActionResult> UpdateProduct(
+            int id,
+            Product updatedProduct)
         {
-            var product = products.FirstOrDefault(p => p.Id == id);
+            var product = await _context.Products.FindAsync(id);
 
             if (product == null)
             {
@@ -70,20 +69,24 @@ namespace CatalogService.Controllers
             product.Price = updatedProduct.Price;
             product.Stock = updatedProduct.Stock;
 
+            await _context.SaveChangesAsync();
+
             return Ok(product);
         }
 
+        // DELETE: api/Product/1
         [HttpDelete("{id}")]
-        public IActionResult DeleteProduct(int id)
+        public async Task<IActionResult> DeleteProduct(int id)
         {
-            var product = products.FirstOrDefault(p => p.Id == id);
+            var product = await _context.Products.FindAsync(id);
 
             if (product == null)
             {
                 return NotFound();
             }
 
-            products.Remove(product);
+            _context.Products.Remove(product);
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }
