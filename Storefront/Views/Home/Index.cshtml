@@ -1,31 +1,126 @@
 ﻿@model List<Storefront.Clients.ProductView>
-@{ ViewData["Title"] = "Store"; }
-<h1>Products</h1>
-@if (ViewBag.Error != null) { <div class="alert alert-warning">@ViewBag.Error</div> }
-@if (TempData["Error"] != null) { <div class="alert alert-danger">@TempData["Error"]</div> }
+@{ ViewData["Title"] = "Shop"; }
 
-<form asp-controller="Orders" asp-action="Create" method="post">
-    <div class="mb-3"><input class="form-control" name="CustomerName" placeholder="Your name" required /></div>
-    <table class="table">
-        <thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Qty</th></tr></thead>
-        <tbody>
-        @for (var i = 0; i < Model.Count; i++)
-        {
-            <tr>
-                <td>@Model[i].Name</td>
-                <td>@Model[i].Price.ToString("C")</td>
-                <td>@Model[i].Stock</td>
-                <td>
-                    <input type="hidden" name="Lines[@i].ProductId" value="@Model[i].Id" />
-                    <input type="number" min="0" value="0" name="Lines[@i].Quantity" class="form-control" style="width:90px" />
-                </td>
-            </tr>
-        }
-        </tbody>
-    </table>
-    <div class="form-check mb-3">
-        <input class="form-check-input" type="checkbox" name="ForcePaymentFailure" value="true" id="ff" />
-        <label class="form-check-label" for="ff">Simulate payment failure (demo compensation)</label>
+<section class="hero">
+    <h1>Shop</h1>
+    <p>Choose your items, review the summary, and place your order. Stock is reserved and payment is charged automatically.</p>
+</section>
+
+@if (ViewBag.Error != null) { <div class="alert-box warn" role="alert">@ViewBag.Error</div> }
+
+<form asp-controller="Orders" asp-action="Create" method="post" id="orderForm">
+    <div class="shop-grid">
+        <div>
+            @if (Model.Count == 0)
+            {
+                <div class="panel">No products are available right now. Please try again shortly.</div>
+            }
+            <div class="product-grid">
+            @for (var i = 0; i < Model.Count; i++)
+            {
+                var p = Model[i];
+                var soldOut = p.Stock <= 0;
+                var low = p.Stock > 0 && p.Stock <= 5;
+                <article class="product-card @(soldOut ? "is-soldout" : "")" data-price="@p.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-name="@p.Name">
+                    <div class="product-thumb" aria-hidden="true">@(p.Name.Length > 0 ? p.Name.Substring(0, 1).ToUpper() : "?")</div>
+                    <div class="product-body">
+                        <h2 class="product-name">@p.Name</h2>
+                        <div class="product-meta">
+                            <span class="price">₱@p.Price.ToString("N2")</span>
+                            @if (soldOut) { <span class="chip chip-out">Out of stock</span> }
+                            else if (low) { <span class="chip chip-low">Only @p.Stock left</span> }
+                            else { <span class="chip chip-ok">@p.Stock in stock</span> }
+                        </div>
+                        <input type="hidden" name="Lines[@i].ProductId" value="@p.Id" />
+                        <div class="stepper">
+                            <button type="button" class="step-btn" data-step="-1" aria-label="Decrease quantity of @p.Name" disabled>&minus;</button>
+                            <input type="number" name="Lines[@i].Quantity" class="qty" value="0" min="0" max="@p.Stock" inputmode="numeric" aria-label="Quantity of @p.Name" @(soldOut ? "disabled" : "") />
+                            <button type="button" class="step-btn" data-step="1" aria-label="Increase quantity of @p.Name" @(soldOut ? "disabled" : "")>+</button>
+                        </div>
+                    </div>
+                </article>
+            }
+            </div>
+        </div>
+
+        <aside class="summary" aria-label="Order summary">
+            <div class="summary-card">
+                <h2>Your order</h2>
+                <label for="CustomerName" class="field-label">Name</label>
+                <input id="CustomerName" name="CustomerName" class="field" placeholder="Full name" maxlength="100" autocomplete="name" required />
+                <ul class="summary-lines" id="summaryLines" aria-live="polite"><li class="empty">No items yet. Use + to add products.</li></ul>
+                <div class="summary-total"><span>Total</span><strong id="summaryTotal">₱0.00</strong></div>
+                <details class="demo-options">
+                    <summary>Demo options</summary>
+                    <label class="switch-row">
+                        <input type="checkbox" name="ForcePaymentFailure" value="true" />
+                        <span>Simulate payment failure<small>Triggers the compensation flow: stock is released and the order is cancelled.</small></span>
+                    </label>
+                </details>
+                <button type="submit" class="btn-primary-lg" id="placeBtn" disabled>Place order</button>
+                <p class="hint">You will see live status updates after placing the order.</p>
+            </div>
+        </aside>
     </div>
-    <button class="btn btn-primary">Place order</button>
 </form>
+
+@section Scripts {
+<script>
+(function () {
+  var form = document.getElementById('orderForm');
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.product-card'));
+  var name = document.getElementById('CustomerName');
+  var lines = document.getElementById('summaryLines');
+  var totalEl = document.getElementById('summaryTotal');
+  var btn = document.getElementById('placeBtn');
+
+  function money(n) { return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+  function update() {
+    var total = 0, count = 0;
+    lines.innerHTML = '';
+    cards.forEach(function (card) {
+      var input = card.querySelector('.qty');
+      var max = parseInt(input.max, 10) || 0;
+      var qty = parseInt(input.value, 10) || 0;
+      if (qty < 0) qty = 0;
+      if (qty > max) qty = max;
+      input.value = qty;
+      var price = parseFloat(card.dataset.price);
+      card.classList.toggle('has-qty', qty > 0);
+      card.querySelector('[data-step="-1"]').disabled = qty <= 0;
+      card.querySelector('[data-step="1"]').disabled = qty >= max;
+      if (qty > 0) {
+        count += qty; total += qty * price;
+        var li = document.createElement('li');
+        var left = document.createElement('span'); left.textContent = qty + ' × ' + card.dataset.name;
+        var right = document.createElement('span'); right.textContent = money(qty * price);
+        li.appendChild(left); li.appendChild(right); lines.appendChild(li);
+      }
+    });
+    if (count === 0) {
+      var empty = document.createElement('li');
+      empty.className = 'empty';
+      empty.textContent = 'No items yet. Use + to add products.';
+      lines.appendChild(empty);
+    }
+    totalEl.textContent = money(total);
+    btn.disabled = !(count > 0 && name.value.trim().length > 0);
+  }
+
+  cards.forEach(function (card) {
+    card.querySelectorAll('.step-btn').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var input = card.querySelector('.qty');
+        input.value = (parseInt(input.value, 10) || 0) + parseInt(b.dataset.step, 10);
+        update();
+      });
+    });
+    card.querySelector('.qty').addEventListener('input', update);
+  });
+  name.addEventListener('input', update);
+  form.addEventListener('submit', function () { btn.disabled = true; btn.textContent = 'Placing order…'; });
+  update();
+})();
+</script>
+}

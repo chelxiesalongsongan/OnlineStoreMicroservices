@@ -1,25 +1,111 @@
 ﻿@model Storefront.Clients.OrderView
-@{ ViewData["Title"] = $"Order {Model.Id}"; var inFlight = Model.Status is "Pending" or "StockReserved"; }
-<h1>Order #@Model.Id</h1>
-@if (TempData["Error"] != null) { <div class="alert alert-danger">@TempData["Error"]</div> }
-
-<p>
-    Status:
-    <span class="badge @(Model.Status == "Confirmed" ? "bg-success" : Model.Status == "Cancelled" ? "bg-danger" : "bg-secondary")">@Model.Status</span>
-    @if (inFlight) { <small class="text-muted">processing… refreshing</small> }
-</p>
-@if (Model.CancelReason != null) { <p class="text-danger">Reason: @Model.CancelReason</p> }
-<p>Customer: @Model.CustomerName &middot; Total: @Model.Total.ToString("C")</p>
-<p><small class="text-muted">Correlation ID: @Model.CorrelationId</small></p>
-
-<ul>@foreach (var i in Model.Items) { <li>Product @i.ProductId × @i.Quantity @@ @i.UnitPrice.ToString("C")</li> }</ul>
-
-@if (Model.Status == "Confirmed")
-{
-    <form asp-action="Cancel" asp-route-id="@Model.Id" method="post">
-        <button class="btn btn-outline-danger">Cancel &amp; refund</button>
-    </form>
+@{
+    ViewData["Title"] = $"Order #{Model.Id}";
+    var status = Model.Status;
+    var reason = Model.CancelReason ?? "";
+    var inFlight = status is "Pending" or "StockReserved";
+    var cancelled = status == "Cancelled";
+    var reached = status switch { "Pending" => 1, "StockReserved" => 2, "Confirmed" => 3, _ => 0 };
+    var failed = 0;
+    if (cancelled)
+    {
+        if (reason.StartsWith("Stock")) { reached = 1; failed = 2; }
+        else if (reason.StartsWith("Payment")) { reached = 2; failed = 3; }
+        else if (reason.Contains("customer")) { reached = 3; }
+        else { reached = 1; failed = 2; }
+    }
+    var steps = new[] { "Order placed", "Stock reserved", "Payment confirmed" };
+    var (bannerClass, bannerTitle, bannerText) = status switch
+    {
+        "Pending" => ("info", "We received your order", "We are checking stock availability."),
+        "StockReserved" => ("info", "Stock reserved", "Charging your payment now."),
+        "Confirmed" => ("ok", "Order confirmed", "Payment received. Thank you!"),
+        "Cancelled" => ("bad", "Order cancelled", string.IsNullOrWhiteSpace(reason) ? "This order was cancelled." : reason + ". Any reserved stock was released and payments refunded."),
+        _ => ("info", status, "")
+    };
 }
-<a asp-controller="Home" asp-action="Index">Back to store</a>
 
-@section Scripts { @if (inFlight) { <script>setTimeout(() => location.reload(), 2000);</script> } }
+<div class="order-head">
+    <div>
+        <h1>Order #@Model.Id</h1>
+        <p class="order-sub">for @Model.CustomerName</p>
+    </div>
+    <span class="status-pill @status.ToLowerInvariant()">@status</span>
+</div>
+
+<div class="banner @bannerClass" role="status" aria-live="polite">
+    <strong>@bannerTitle</strong>
+    @bannerText
+    @if (inFlight) { <span> This page updates automatically.</span> }
+</div>
+
+<section class="panel" aria-label="Order progress">
+    <h2>Progress</h2>
+    <ol class="timeline">
+    @for (var s = 1; s <= steps.Length; s++)
+    {
+        var state = s <= reached ? "done" : (s == failed ? "failed" : (inFlight && s == reached + 1 ? "active" : "todo"));
+        <li class="tl-step is-@state">
+            <span class="tl-dot" aria-hidden="true">@(state == "done" ? "✓" : state == "failed" ? "✕" : s.ToString())</span>
+            <span class="tl-label">@steps[s - 1]</span>
+        </li>
+    }
+    </ol>
+</section>
+
+<section class="panel">
+    <h2>Items</h2>
+    <table class="items">
+        <thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Line total</th></tr></thead>
+        <tbody>
+        @foreach (var i in Model.Items)
+        {
+            <tr>
+                <td>Product #@i.ProductId</td>
+                <td class="num">@i.Quantity</td>
+                <td class="num">₱@i.UnitPrice.ToString("N2")</td>
+                <td class="num">₱@((i.Quantity * i.UnitPrice).ToString("N2"))</td>
+            </tr>
+        }
+        </tbody>
+        <tfoot><tr><td colspan="3">Total</td><td class="num">₱@Model.Total.ToString("N2")</td></tr></tfoot>
+    </table>
+</section>
+
+<section class="panel">
+    <h2>Details</h2>
+    <dl class="meta">
+        <div><dt>Customer</dt><dd>@Model.CustomerName</dd></div>
+        <div><dt>Status</dt><dd>@status</dd></div>
+        <div><dt>Correlation ID</dt><dd><code id="cid">@Model.CorrelationId</code> <button type="button" class="btn-x" id="copyCid" style="padding:2px 10px;font-size:.8rem">Copy</button></dd></div>
+    </dl>
+</section>
+
+<div class="btn-row">
+    @if (status == "Confirmed")
+    {
+        <form asp-action="Cancel" asp-route-id="@Model.Id" method="post" onsubmit="return confirm('Cancel this order and refund the payment?');">
+            <button class="btn-x danger">Cancel &amp; refund</button>
+        </form>
+    }
+    <a class="btn-x primary" asp-controller="Home" asp-action="Index">Back to shop</a>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+  var btn = document.getElementById('copyCid');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var t = document.getElementById('cid').textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(t);
+    btn.textContent = 'Copied';
+    setTimeout(function () { btn.textContent = 'Copy'; }, 1500);
+  });
+})();
+</script>
+@if (inFlight)
+{
+    <script>setTimeout(function () { location.reload(); }, 2000);</script>
+}
+}
